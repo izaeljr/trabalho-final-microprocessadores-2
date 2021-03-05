@@ -121,15 +121,15 @@
 
 /*****************************************************************************/
 /* Main Program                                                              */
-/* r8  - base address for UART                                               */
-/* r9  - Control															 */
-/* r10 - Armazena codigo ascii do caracter z    							 */
+/* r2  - base address for UART                                               */
+/* r3  - Control															 */
+/* r4 - Armazena codigo ascii do caracter z    							 */
 /*****************************************************************************/
 
 /* definição de constantes ***************************************************/
 .equ    UART, 0x10001000  
 .equ    mask, 0xFFFF
-.equ    entry_msg , 0x1000
+.equ    entry_msg, 0x1000
 /*****************************************************************************/
 
 /* definição de constantes para códigos ascii das letras do alfabeto *********/
@@ -169,10 +169,62 @@
 /*  função MAIN */
 .global _start
 _start:
-	movia	r8, UART
-    /*call	exibe_mensagem*/
+	movia	r2, UART
+    ldw     r3, 4(r8)   /*   r9: conteudo do control */
+LOOP:
+    srli    r3, r3, 16  /*   scroll para pegar a parte alta do Control */
+    andi 	r3, r3, mask    /*   Isolando o bit de interesse, RVALID */
+	beq 	r0, r3, LOOP    /*   caso RVALID != 0, sai do LOOP */
+	
+	ldw     r3, (r2)        /*  carrega conteudo de Data em r9 */
+	andi 	r3, r3, 0x7F    /*  isola ultimos bits */
+	
+SWITCH_MAIN:
+    movia   r4, 0x30        /*  r4 recebe código ascii de 0 */
+    beq     r3,r4, SWITCH_LED
 
-    br exibe_mensagem	
+    movia   r4, 0x31        /*  r4 recebe código ascii de 1 */
+    beq     r3,r4, IF_CHAVE
+
+    movia   r4, 0x32        /*  r4 recebe código ascii de 2 */
+    beq     r3,r4, SWITCH_ROT
+
+    /*  call mensagem - tem que passar como parametro o endereco da mensagem ?? */
+    br end /* ? */
+
+SWITCH_LED:
+    ldw     r3, (r2)        /*  carrega conteudo de Data em r9 */
+	andi 	r3, r3, 0x7F    /*  isola ultimos bits */
+
+    movia   r4, 0x30        /*  r4 recebe código ascii de 0 */
+    beq     r3,r4, ACENDER_LED
+
+    movia   r4, 0x31        /*  r4 recebe código ascii de 1 */
+    beq     r3,r4, APAGAR_LED
+
+    /* call mensagem */
+    br end
+
+
+
+ACENDER_LED:
+
+    /* fazer td as verificações ? */
+    call ler_led
+    call led_valido
+    call acende_led
+
+    br end
+
+APAGAR_LED:
+
+    /* fazer td as verificações ? */
+    call ler_led
+    call led_valido
+    call apaga_led
+
+    br end
+
 
 end:
     br end      /* Remain here if done */
@@ -214,6 +266,8 @@ exibe_mensagem:
 	
 	ret
 /*****************************************************************************/
+
+.end
 	
 .org 0x1000	
 
