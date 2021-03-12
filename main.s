@@ -123,46 +123,17 @@
 /* Main Program                                                              */
 /* r2  - base address for UART                                               */
 /* r3  - Control															 */
-/* r4 - Armazena codigo ascii do caracter z    							 */
+/* r4 - Registrador reservado para enviar parâmetros para as funções         */
+/* r5 - Registrador reservado para enviar parâmetros para as funções         */
 /*****************************************************************************/
 
 /* definição de constantes ***************************************************/
-.equ    UART, 0x10001000  
 .equ    mask, 0xFFFF
-.equ    entry_msg, 0x1000
-/*****************************************************************************/
-
-/* definição de constantes para códigos ascii das letras do alfabeto *********/
-.equ    space, 0x20
-.equ    dots, 0x3a //???
-
-.equ    C, 0x43
-.equ    E, 0x45
-.equ    L, 0x4c
-.equ    U, 0x55
-
-.equ    a, 0x61
-.equ    b, 0x62
-.equ    c, 0x63
-.equ    d, 0x64
-.equ    e, 0x65
-.equ    f, 0x66
-.equ    g, 0x67
-.equ    h, 0x68
-.equ    i, 0x69
-.equ    j, 0x6a
-.equ    l, 0x6c
-.equ    m, 0x6d
-.equ    n, 0x6e
-.equ    o, 0x6f
-.equ    p, 0x70
-.equ    q, 0x71
-.equ    r, 0x72
-.equ    s, 0x73
-.equ    t, 0x74
-.equ    u, 0x75
-.equ    v, 0x76
-.equ    z, 0x7a
+.equ	IO_BASE_ADDR, 	0x10000000
+.equ    UART, 0x10001000        /* Endereço base do terminal UART  */
+.equ	LEDs,	0x10000010		/* Endereço base dos LEDs	       */
+.equ	DISPLAYs,0x20		/* Endereço base do DISPLAY	       */
+.equ 	switches, 0x40	/* Endereço base dos switches	   */
 /*****************************************************************************/
 
 /*****************************************************************************/
@@ -170,142 +141,287 @@
 .global _start
 _start:
 	movia	r2, UART
-    ldw     r3, 4(r8)   /*   r9: conteudo do control */
-LOOP:
-    srli    r3, r3, 16  /*   scroll para pegar a parte alta do Control */
-    andi 	r3, r3, mask    /*   Isolando o bit de interesse, RVALID */
-	beq 	r0, r3, LOOP    /*   caso RVALID != 0, sai do LOOP */
-	
-	ldw     r3, (r2)        /*  carrega conteudo de Data em r9 */
-	andi 	r3, r3, 0x7F    /*  isola ultimos bits */
-	
+    ldwio   r3, 4(r8)   /*   r9: conteudo do control */
+
+MAIN:
+    /*  Chamada para a função de print                                         */	
+	mov	    	r4, r2
+    movia     	r5, teste             /* Carrega os parâmetros para sub-rotina */
+    
+    call	exibe_mensagem
+
+    mov	    	r4, r2    
+    call	ler_entrada
+
+
 SWITCH_MAIN:
-    movia   r4, 0x30        /*  r4 recebe código ascii de 0 */
-    beq     r3,r4, SWITCH_LED
+    movia   r7, 0x30        /*  r4 recebe código ascii de 0 */
+    beq     r3,r7, SWITCH_LED
 
-    movia   r4, 0x31        /*  r4 recebe código ascii de 1 */
-    beq     r3,r4, IF_CHAVE
+    movia   r7, 0x31        /*  r4 recebe código ascii de 0 */
+    beq     r3,r7, DISPLAY_NUM_TRI
 
-    movia   r4, 0x32        /*  r4 recebe código ascii de 2 */
-    beq     r3,r4, SWITCH_ROT
+    
 
-    /*  call mensagem - tem que passar como parametro o endereco da mensagem ?? */
-    br end /* ? */
-
+    /* Caso comando seja inválido, exibe a mensagem */
+    mov	    	r4, r2
+    movia     	r5, invalid_cmd_msg             /* Carrega os parâmetros para sub-rotina */
+    call	exibe_mensagem
+		
+    br MAIN
 SWITCH_LED:
-    ldw     r3, (r2)        /*  carrega conteudo de Data em r9 */
-	andi 	r3, r3, 0x7F    /*  isola ultimos bits */
+	mov	    r4, r2    
+    call	ler_entrada
 
-    movia   r4, 0x30        /*  r4 recebe código ascii de 0 */
-    beq     r3,r4, ACENDER_LED
+    movia   r7, 0x30        /*  r4 recebe código ascii de 0 */
+    beq     r3,r7, PISCAR_LED
 
-    movia   r4, 0x31        /*  r4 recebe código ascii de 1 */
-    beq     r3,r4, APAGAR_LED
+    movia   r7, 0x31        /*  r4 recebe código ascii de 1 */
+    beq     r3,r7, PARAR_LED
 
-    /* call mensagem */
-    br end
+	/* Caso comando seja inválido, exibe a mensagem */
+    mov	    	r4, r2
+    movia     	r5, invalid_cmd_msg             /* Carrega os parâmetros para sub-rotina */
+    call	exibe_mensagem
+		
+    br MAIN
 
-
-
-ACENDER_LED:
-
-    /* fazer td as verificações ? */
-    call ler_led
-    call led_valido
+PISCAR_LED:
+	mov	    r4, r2    
+    call	ler_entrada
+	mov	    r4, r3
+	call	verifica_LED	/* verifica o primeiro led */
+	beq 	r3,r0,MAIN /* ?? */
+	
+	mov	    r4, r2    
+    call	ler_entrada
+	mov	    r4, r3
+	call	verifica_LED	/* verifica o segundo led */
+	beq 	r3,r0,MAIN /* ?? */
+	
+/*	
+	- verificar se o led ja esta piscando, se nao estiver, pisca
     call acende_led
-
+*/
     br end
 
-APAGAR_LED:
+PARAR_LED:
 
-    /* fazer td as verificações ? */
+    /* fazer td as verificações ? 
     call ler_led
     call led_valido
     call apaga_led
-
+*/
     br end
 
+DISPLAY_NUM_TRI:
+    mov	    r4, r2    
+    call	ler_entrada
+
+	movia 	r7,0x30
+    beq     r3,r7,SWITCHES_NUM_TRI
+    /* Caso comando seja inválido, exibe a mensagem */
+    mov	    	r4, r2
+    movia     	r5, invalid_cmd_msg             /* Carrega os parâmetros para sub-rotina */
+    call	exibe_mensagem
+    
+    br MAIN
+
+SWITCHES_NUM_TRI:
+    movia	r4,IO_BASE_ADDR
+    call    LER_SWITCHES
+
+    /* ?? fazer funcao para verificar se é válido  */
+	mov		r4, r3
+    call	NUMERO_TRIANGULAR
+
+    mov		r4,r3
+    movia   r5,IO_BASE_ADDR
+    call    EXIBE_DISPLAY
+
+    br MAIN
 
 end:
     br end      /* Remain here if done */
 /*****************************************************************************/
 
 /*  FUNÇÕES DIVERSAS  ********************************************************/
+.global exibe
 exibe_mensagem:
+    addi sp, sp, -8 
+	stw ra, 4(sp)
+	stw fp, 0(sp)
 
-	/*addi sp, sp, -12 	 make a 16-byte frame */
-	/*stw ra, 8(sp) 		 store the return address */
-	/*stw r8, 4(sp)
-	/*stw r16, 0(sp) 		 store callee-saved register */
+	addi fp,sp,0	
 	
-	movia 	r6, entry_msg 
-    addi    r6,r6,4     /* r4 aponta para o tamanho da mensagem ??????*/ 
-    ldw 	r5, (r6)
-    subi 	r5,r5,1
-    subi    r6,r6,4
-
-	LOOP:
-        subi	r5, r5, 1
-        beq 	r5, r0, DONE 		/* Finished if r5 is equal to 0 */
-        ldw 	r7,(r6)		
-        addi 	r6, r6, 4 
-        ldw 	r9,(r6)
-        stwio   r9, (r8)
-        addi 	r6, r6, 4 		/* Increment the list pointer */
-        stw 	r10, (r6) 
-        br LOOP
-    
-    		   
-    }
+	mov 	r8,r4	/* base uart */
+	mov		r9,r5	/* mensagem  */
 	
-/*fim:
-	ldw ra, 8(sp)
-	ldw r8, 4(sp)
-	ldw r16, 0(sp)
-	addi sp, sp, 12
+LOOP_MSG:	
+	ldwio 	r10, 4(r8)			/* pegando o reg control */
+	andhi 	r10, r10, 0xFFFF	/* pegando os 15 primeiros bits */
+	beq 	r10, r0, LOOP_MSG
+	ldb 	r11, 0(r9)			/*  */
+	beq 	r11,r0, FIM_LOOP_MSG
+	stwio 	r11, 0(r8)
+	addi 	r9, r9, 0x1
+	br 		LOOP_MSG
 	
+FIM_LOOP_MSG:
+    mov sp,fp
+	ldw ra, 4(sp) 
+	ldw fp, 0(sp)
+	addi sp,sp,0
 	ret
+
+
+ler_entrada:
+    addi sp, sp, -8 
+	stw ra, 4(sp)
+	stw fp, 0(sp)
+
+	addi fp,sp,0
+
+LOOP_ENTRADA:
+    ldwio   r3, (r4)   	    /*   r9: conteudo do registrador Data */
+	mov 	r8,r3
+	srli    r8, r8, 15  
+
+	andi 	r8, r8, 0xFFFF     /*   Isolando o bit de interesse, RVALID */
+	beq 	r0, r8, LOOP_ENTRADA    /*   caso RVALID != 0, sai do LOOP */
+	
+	andi 	r3, r3, 0x7F    /*  isola ultimos bits */
+	
+FIM_LOOP_ENTRADA:
+    mov sp,fp
+	ldw ra, 4(sp) 
+	ldw fp, 0(sp)
+	addi sp,sp,0
+	ret
+	
+
+verifica_LED:
+	addi sp, sp, -8 
+	stw ra, 4(sp)
+	stw fp, 0(sp)
+
+	addi fp,sp,0
+
+	movia 	r8, 0x38
+	blt		r4,r0,led_invalido
+	bgt		r4,r8,led_invalido
+	movia 	r3,1	/* retorna 1 para valido */
+	br fim_verifica_LED
+	
+led_invalido:
+	mov	    	r4, r2
+    movia     	r5, invalid_led_msg             /* Carrega os parâmetros para sub-rotina */
+    call	exibe_mensagem
+	
+	movia 	r3,0	/* retorna 0 para invalido */
+
+fim_verifica_LED:
+	mov sp,fp
+	ldw ra, 4(sp) 
+	ldw fp, 0(sp)
+	addi sp,sp,0
+	ret
+
+NUMERO_TRIANGULAR:
+	addi sp, sp, -8 
+	stw ra, 4(sp)
+	stw fp, 0(sp)
+
+	addi fp,sp,0
+
+
+	/*  Fórmula do número triangular de n: n(n + 1)/2	*/
+	addi	r8,r4,1
+	mul		r8,r8,r4
+	srli	r3,r8,1	
+	
+
+FIM_LOOP:
+	mov sp,fp
+	ldw ra, 4(sp) 
+	ldw fp, 0(sp)
+	addi sp,sp,0
+	ret
+
+EXIBE_DISPLAY:
+	addi sp, sp, -8 
+	stw ra, 4(sp)
+	stw fp, 0(sp)
+
+	addi fp,sp,0
+
+    movi 	r13, _7SEG
+    add		r8, r0, r0			/* Clear r19                             */
+	addi	r9, r0, 4			/* Initialize the LOOP2 counter          */
+	mov		r10, r4			    /* r21 holds the number being processed  */
+display_loop:
+	andi	r11, r10, 0xf		/* Extract a hex digit                   */
+	add		r11, r13, r11
+	ldb		r12, (r11)			/* Look up the 7-segment pattern         */
+	or		r8, r8, r12		/* Include the pattern in total display  */
+	roli	r8, r8, 24		/* Make room for pattern of next digit   */
+	srli	r10, r10, 4			/* Now consider the next hex digit       */
+	subi	r9, r9, 1			/* Decrement the counter                 */
+	bgt		r9, r0, display_loop		/* Branch back if not done               */
+	stwio	r8, DISPLAYs(r5)		/* Display the sum on HEX display        */        
+
+	mov sp,fp
+	ldw ra, 4(sp) 
+	ldw fp, 0(sp)
+	addi sp,sp,0
+	ret
+
+LER_SWITCHES:
+    addi sp, sp, -8 
+	stw ra, 4(sp)
+	stw fp, 0(sp)
+
+	addi fp,sp,0
+
+    ldwio	r8, switches(r4)		/* Read in the new number                */    
+    andi    r3, r8, 0xFF          /* Consider only the first 8 switches      */
+
+    mov sp,fp
+	ldw ra, 4(sp) 
+	ldw fp, 0(sp)
+	addi sp,sp,0
+	ret
+
 /*****************************************************************************/
 
-.end
+
 	
 .org 0x1000	
 
-/*  Definição de mensagens que serão exibidas no terminal UART em tempo de execução */
-entry_msg:
-/*  "Entre com o comando: " */
-.word E,n,t,r,e,space,c,o,m,space,o,space,c,o,m,a,n,d,o,dots 				
-size_entry_msg:
-.word 20	
-
+/*  Definição de mensagens que serão exibidas ********************************/
+menu:
+	.asciz "\nMENU:\n00: Piscar LED\n01: Desligar LED\n10: Numero triangular\n20: Rotacionar '2021'\n21: Parar rotacao\nEntre com o comando:"	
+	
 invalid_cmd_msg:
-/*  "Comando invalido " */
-.word C,o,m,a,n,d,o,space,i,n,v,a,l,i,d,o 				
-size_invalid_cmd_msg:
-.word 16	
+    .asciz "\nERRO! Comando invalido.."
 
 invalid_led_msg:
-/*  "LED invalido " */
-.word L,E,D,space,i,n,v,a,l,i,d,o 				
-size_invalid_led_msg:
-.word 12
+    .asciz "\nERRO! LED invalido.."
 
 led_on_msg:
-/*  "LED ja aceso " */
-.word L,E,D,space,j,a,space,a,c,e,s,o 				
-size_led_on_msg:
-.word 12
+    .asciz "\nLED ja esta aceso.."
 
 led_off_msg:
-/*  "LED ja apagado " */
-.word L,E,D,space,j,a,space,a,p,a,g,a,d,o				
-size_led_off_msg:
-.word 14
+    .asciz "\nLED ja esta apagado.."
 
 no_entry_msg:
-/*  "Usuario nao entrou com nenhum valor " */
-.word U,s,u,a,r,i,o,space,n,a,o,space,e,n,t,r,o,u,space,c,o,m,space,n,e,n,h,u,m,space,v,a,l,o,r				
-size_no_entry_msg:
-.word 35
+    .asciz "\nERRO! Usuario nao entrou com nenhum valor.."
+teste:
+    .asciz "\nteste.."
 /*****************************************************************************/
+
+/* This is the hex-digit to 7-segment conversion table                             */ 
+_7SEG:
+.byte 0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x67,0x77,0x7c,0x39,0x5e,0x79,0x71
+
 .end
